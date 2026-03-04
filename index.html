@@ -409,9 +409,9 @@
       <div class="mic-beat-dot" id="mic-beat-dot" style="display:none"></div>
       <div id="mic-sens" style="display:none" class="pre" style="margin:0;gap:4px">
         <span class="il" style="padding-top:4px">감도</span>
-        <button class="pb" onclick="sMicSens(1.8,this)">LOW</button>
-        <button class="pb on" onclick="sMicSens(1.4,this)">MID</button>
-        <button class="pb" onclick="sMicSens(1.15,this)">HIGH</button>
+        <button class="pb" onclick="sMicSens(1.8,this)">NARROW</button>
+        <button class="pb on" onclick="sMicSens(1.4,this)">DEFAULT</button>
+        <button class="pb" onclick="sMicSens(1.0,this)">WIDE</button>
       </div>
     </div>
   </div>
@@ -565,16 +565,173 @@ function calcBms(){
   document.getElementById('bm-b').innerHTML=(ms*4).toFixed(0)+'<span class="u">ms</span>';
 }
 
-// ===== 통합 BPM (TAP + MIC) =====
-// 탭 = 앵커 (기준점), 마이크 = 범위 내 정밀 보정
+// ===== BeatDetektor Engine (MIT License, Charles J. Cliffe) =====
+// FFT 128범위 분석 + 품질 투표 + 피드백 루프 수렴 방식
+var BeatDetektor=function(bMin,bMax){
+  bMin=bMin||60;bMax=bMax||180;
+  this.BPM_MIN=bMin;this.BPM_MAX=bMax;
+  this.config={BD_DETECTION_RANGES:128,BD_DETECTION_RATE:12.0,BD_DETECTION_FACTOR:0.915,
+    BD_QUALITY_DECAY:0.6,BD_QUALITY_TOLERANCE:0.96,BD_QUALITY_REWARD:10.0,BD_QUALITY_STEP:0.1,
+    BD_MINIMUM_CONTRIBUTIONS:6,BD_FINISH_LINE:60.0,
+    BD_REWARD_TOLERANCES:[0.001,0.005,0.01,0.02,0.04,0.08,0.10,0.15,0.30],
+    BD_REWARD_MULTIPLIERS:[20.0,10.0,8.0,1.0,0.5,0.25,0.125,0.0625,0.03125]};
+  this.reset();
+};
+BeatDetektor.prototype.reset=function(){
+  var c=this.config,n=c.BD_DETECTION_RANGES;
+  this.a_freq_range=new Array(n);this.ma_freq_range=new Array(n);
+  this.maa_freq_range=new Array(n);this.last_detection=new Array(n);
+  this.ma_bpm_range=new Array(n);this.maa_bpm_range=new Array(n);
+  this.detection_quality=new Array(n);this.detection=new Array(n);
+  for(var i=0;i<n;i++){
+    this.a_freq_range[i]=0;this.ma_freq_range[i]=0;this.maa_freq_range[i]=0;
+    this.last_detection[i]=0;
+    this.ma_bpm_range[i]=this.maa_bpm_range[i]=60/this.BPM_MIN+((60/this.BPM_MAX-60/this.BPM_MIN)*(i/n));
+    this.detection_quality[i]=0;this.detection[i]=false;
+  }
+  this.ma_quality_avg=0;this.ma_quality_total=0;this.bpm_contest=[];this.bpm_contest_lo=[];
+  this.quality_total=0;this.quality_avg=0;this.current_bpm=0;this.current_bpm_lo=0;
+  this.winning_bpm=0;this.win_val=0;this.winning_bpm_lo=0;this.win_val_lo=0;
+  this.win_bpm_int=0;this.win_bpm_int_lo=0;this.bpm_predict=0;
+  this.is_erratic=false;this.bpm_offset=0;this.last_timer=0;this.last_update=0;
+  this.bpm_timer=0;this.beat_counter=0;this.half_counter=0;this.quarter_counter=0;
+};
+BeatDetektor.prototype.process=function(ts,fft){
+  if(!this.last_timer){this.last_timer=ts;return;}
+  if(this.last_timer>ts){this.reset();return;}
+  this.last_update=ts-this.last_timer;this.last_timer=ts;
+  if(this.last_update>1.0){this.reset();return;}
+  var c=this.config,i,x,v,bpmFloor=60/this.BPM_MAX,bpmCeil=60/this.BPM_MIN;
+  var step=fft.length/c.BD_DETECTION_RANGES,range=0;
+  for(x=0;x<fft.length;x+=step){
+    this.a_freq_range[range]=0;
+    for(i=x;i<x+step;i++){v=Math.abs(fft[Math.min(Math.floor(i),fft.length-1)]);this.a_freq_range[range]+=v;}
+    this.a_freq_range[range]/=step;
+    this.ma_freq_range[range]-=(this.ma_freq_range[range]-this.a_freq_range[range])*this.last_update*c.BD_DETECTION_RATE;
+    this.maa_freq_range[range]-=(this.maa_freq_range[range]-this.ma_freq_range[range])*this.last_update*c.BD_DETECTION_RATE;
+    var det=(this.ma_freq_range[range]*c.BD_DETECTION_FACTOR>=this.maa_freq_range[range]);
+    if(this.ma_bpm_range[range]>bpmCeil)this.ma_bpm_range[range]=bpmCeil;
+    if(this.ma_bpm_range[range]<bpmFloor)this.ma_bpm_range[range]=bpmFloor;
+    if(this.maa_bpm_range[range]>bpmCeil)this.maa_bpm_range[range]=bpmCeil;
+    if(this.maa_bpm_range[range]<bpmFloor)this.maa_bpm_range[range]=bpmFloor;
+    var rewarded=false;
+    if(!this.detection[range]&&det){
+      var gap=ts-this.last_detection[range];
+      if(gap<bpmCeil&&gap>bpmFloor){
+        for(i=0;i<c.BD_REWARD_TOLERANCES.length;i++){
+          if(Math.abs(this.ma_bpm_range[range]-gap)<this.ma_bpm_range[range]*c.BD_REWARD_TOLERANCES[i]){
+            this.detection_quality[range]+=c.BD_QUALITY_REWARD*c.BD_REWARD_MULTIPLIERS[i];rewarded=true;
+          }
+        }
+        if(rewarded)this.last_detection[range]=ts;
+      }else if(gap>=bpmCeil){
+        var hg=gap/2;
+        if(hg<bpmCeil&&hg>bpmFloor)for(i=0;i<c.BD_REWARD_TOLERANCES.length;i++){
+          if(Math.abs(this.ma_bpm_range[range]-hg)<this.ma_bpm_range[range]*c.BD_REWARD_TOLERANCES[i]){
+            this.detection_quality[range]+=c.BD_QUALITY_REWARD*c.BD_REWARD_MULTIPLIERS[i];rewarded=true;
+          }
+        }
+        this.last_detection[range]=ts;
+      }
+      if(rewarded){
+        var qmp=Math.min(1,(this.detection_quality[range]/this.quality_avg)*c.BD_QUALITY_STEP);
+        this.ma_bpm_range[range]-=(this.ma_bpm_range[range]-gap)*qmp;
+        this.maa_bpm_range[range]-=(this.maa_bpm_range[range]-this.ma_bpm_range[range])*qmp;
+      }else if(gap>=bpmFloor&&gap<=bpmCeil){
+        if(this.detection_quality[range]<this.quality_avg*c.BD_QUALITY_TOLERANCE&&this.current_bpm){
+          this.ma_bpm_range[range]-=(this.ma_bpm_range[range]-gap)*c.BD_QUALITY_STEP;
+          this.maa_bpm_range[range]-=(this.maa_bpm_range[range]-this.ma_bpm_range[range])*c.BD_QUALITY_STEP;
+        }
+        this.detection_quality[range]-=c.BD_QUALITY_STEP;
+      }else if(gap>=bpmCeil){
+        if(this.detection_quality[range]<this.quality_avg*c.BD_QUALITY_TOLERANCE&&this.current_bpm){
+          this.ma_bpm_range[range]-=(this.ma_bpm_range[range]-60/this.current_bpm)*0.5;
+          this.maa_bpm_range[range]-=(this.maa_bpm_range[range]-this.ma_bpm_range[range])*0.5;
+        }
+        this.detection_quality[range]-=c.BD_QUALITY_STEP;
+      }
+    }
+    if((!rewarded&&ts-this.last_detection[range]>bpmCeil)||(det&&Math.abs(this.ma_bpm_range[range]-60/(this.current_bpm||120))>this.bpm_offset))
+      this.detection_quality[range]-=this.detection_quality[range]*c.BD_QUALITY_STEP*c.BD_QUALITY_DECAY*this.last_update;
+    if(this.detection_quality[range]<0.001)this.detection_quality[range]=0.001;
+    this.detection[range]=det;range++;
+  }
+  this.quality_total=0;var bpmTotal=0,bpmContribs=0;
+  for(x=0;x<c.BD_DETECTION_RANGES;x++)this.quality_total+=this.detection_quality[x];
+  this.quality_avg=this.quality_total/c.BD_DETECTION_RANGES;
+  if(this.quality_total){
+    this.ma_quality_avg+=(this.quality_avg-this.ma_quality_avg)*this.last_update*c.BD_DETECTION_RATE/2;
+    this.maa_quality_avg+=(this.ma_quality_avg-this.maa_quality_avg)*this.last_update;
+    this.ma_quality_total+=(this.quality_total-this.ma_quality_total)*this.last_update*c.BD_DETECTION_RATE/2;
+    this.ma_quality_avg-=0.98*this.ma_quality_avg*this.last_update*3;
+  }else this.quality_avg=0.001;
+  if(this.ma_quality_total<=0)this.ma_quality_total=0.001;
+  if(this.ma_quality_avg<=0)this.ma_quality_avg=0.001;
+  var avgOff=0,offBpm=this.current_bpm,draft=[];
+  if(this.quality_avg)for(x=0;x<c.BD_DETECTION_RANGES;x++){
+    if(this.detection_quality[x]*c.BD_QUALITY_TOLERANCE>=this.ma_quality_avg){
+      if(this.ma_bpm_range[x]<bpmCeil&&this.ma_bpm_range[x]>bpmFloor){
+        bpmTotal+=this.maa_bpm_range[x];
+        var df=Math.round((60/this.maa_bpm_range[x])*1000);
+        df=(Math.abs(Math.ceil(df)-(60/(this.current_bpm||120))*1000)<Math.abs(Math.floor(df)-(60/(this.current_bpm||120))*1000))?Math.ceil(df/10):Math.floor(df/10);
+        var di=parseInt(df/10);if(typeof draft[di]=='undefined')draft[di]=0;
+        draft[di]+=this.detection_quality[x]/this.quality_avg;bpmContribs++;
+        if(!offBpm)offBpm=this.maa_bpm_range[x];
+        else avgOff+=Math.abs(offBpm-this.maa_bpm_range[x]);
+      }
+    }
+  }
+  var hasPred=bpmContribs>=c.BD_MINIMUM_CONTRIBUTIONS,dw=0,wv=0;
+  if(hasPred){
+    for(var di in draft)if(draft[di]>wv){wv=draft[di];dw=di;}
+    this.bpm_predict=60/(dw/10);avgOff/=bpmContribs;this.bpm_offset=avgOff;
+    if(!this.current_bpm)this.current_bpm=this.bpm_predict;
+  }
+  if(this.current_bpm&&this.bpm_predict)this.current_bpm-=(this.current_bpm-this.bpm_predict)*this.last_update;
+  var cMax=0;
+  for(var ci in this.bpm_contest){
+    if(cMax<this.bpm_contest[ci])cMax=this.bpm_contest[ci];
+    if(this.bpm_contest[ci]>c.BD_FINISH_LINE/2){
+      var dil=parseInt(Math.round(ci/10));
+      if(this.bpm_contest_lo[dil]!=this.bpm_contest_lo[dil])this.bpm_contest_lo[dil]=0;
+      this.bpm_contest_lo[dil]+=(this.bpm_contest[ci]/6)*this.last_update;
+    }
+  }
+  if(cMax>c.BD_FINISH_LINE)for(var ci in this.bpm_contest)this.bpm_contest[ci]=(this.bpm_contest[ci]/cMax)*c.BD_FINISH_LINE;
+  cMax=0;for(var ci in this.bpm_contest_lo)if(cMax<this.bpm_contest_lo[ci])cMax=this.bpm_contest_lo[ci];
+  if(cMax>c.BD_FINISH_LINE)for(var ci in this.bpm_contest_lo)this.bpm_contest_lo[ci]=(this.bpm_contest_lo[ci]/cMax)*c.BD_FINISH_LINE;
+  for(ci in this.bpm_contest)this.bpm_contest[ci]-=this.bpm_contest[ci]*(this.last_update/c.BD_DETECTION_RATE);
+  for(ci in this.bpm_contest_lo)this.bpm_contest_lo[ci]-=this.bpm_contest_lo[ci]*(this.last_update/c.BD_DETECTION_RATE);
+  this.bpm_timer+=this.last_update;
+  var winner=0,winLo=0;
+  if(this.bpm_timer>this.winning_bpm/4&&this.current_bpm){
+    this.win_val=0;this.win_val_lo=0;
+    if(this.winning_bpm)while(this.bpm_timer>this.winning_bpm/4)this.bpm_timer-=this.winning_bpm/4;
+    this.quarter_counter++;this.half_counter=parseInt(this.quarter_counter/2);this.beat_counter=parseInt(this.quarter_counter/4);
+    var idx=parseInt(Math.round((60/this.current_bpm)*10));
+    if(typeof this.bpm_contest[idx]=='undefined')this.bpm_contest[idx]=0;
+    this.bpm_contest[idx]+=c.BD_QUALITY_REWARD;
+    for(var ci in this.bpm_contest)if(this.win_val<this.bpm_contest[ci]){winner=ci;this.win_val=this.bpm_contest[ci];}
+    if(winner){this.win_bpm_int=parseInt(winner);this.winning_bpm=60/(winner/10);}
+    for(var ci in this.bpm_contest_lo)if(this.win_val_lo<this.bpm_contest_lo[ci]){winLo=ci;this.win_val_lo=this.bpm_contest_lo[ci];}
+    if(winLo){this.win_bpm_int_lo=parseInt(winLo);this.winning_bpm_lo=60/winLo;}
+  }
+};
+
+// ===== 통합 BPM (TAP + MIC with BeatDetektor) =====
+// 탭 = 앵커 (기준점), 마이크 = BeatDetektor 엔진으로 안정적 감지
 let tT=[];const TTO=2500;
 let syncInterval=null, syncRunning=false, currentBeat=0, currentBPM=0;
 let micStream=null, micCtx=null, micAnalyser=null, micRunning=false;
-let micBeatTimes=[], micAnimId=null, micEnergyHist=[];
-let micThreshold=1.4;
+let micAnimId=null;
+let beatDetektor=null; // BeatDetektor 인스턴스
+let bdStartTime=0; // BeatDetektor 시작 시간
+let lastMicBPM=0; // 히스테리시스용: 마지막 표시된 마이크 BPM
+let micBpmHoldCount=0; // 같은 BPM 유지 카운터
 let tapAnchorBPM=0; // 탭이 설정한 기준 BPM (0이면 앵커 없음)
-const MIC_HIST=43, MIC_MIN_IV=250, MIC_MAX_BEATS=32;
 const MIC_ANCHOR_RANGE=0.15; // 앵커 ±15% 범위 내에서만 마이크 보정 허용
+const BD_CONFIDENCE_MIN=10; // 최소 신뢰도 (win_val)
+const BD_HYSTERESIS_BPM=1.5; // BPM 변화가 이 이상일 때만 업데이트
 
 function updateBPM(bpm,src){
   currentBPM=bpm;
@@ -601,7 +758,7 @@ function tap(e){
     if(micRunning){
       // 탭 앵커 설정: 마이크는 이 BPM ±15% 내에서만 보정 가능
       tapAnchorBPM=bpm;
-      micBeatTimes=[];
+      lastMicBPM=0; // 히스테리시스 리셋
     }
     if(tT.length>=4&&!syncRunning){startSync();}
     else if(syncRunning){stopSync();startSync();}
@@ -612,7 +769,8 @@ function tap(e){
 }
 
 function tapR(){
-  tT=[];currentBPM=0;tapAnchorBPM=0;micBeatTimes=[];micEnergyHist=[];
+  tT=[];currentBPM=0;tapAnchorBPM=0;lastMicBPM=0;micBpmHoldCount=0;
+  if(beatDetektor){beatDetektor.reset();bdStartTime=performance.now();lastBeatCount=0;}
   document.getElementById('tap-d').textContent='---';
   document.getElementById('tap-c').textContent='0';
   document.getElementById('tap-i').innerHTML='--<span class="u">ms</span>';
@@ -627,7 +785,7 @@ function bpmMult(f){
   const newBpm=currentBPM*f;
   updateBPM(newBpm,'tap');
   if(tapAnchorBPM>0)tapAnchorBPM=newBpm;
-  micBeatTimes=[];
+  lastMicBPM=0;
   if(syncRunning){stopSync();startSync();}
 }
 
@@ -670,17 +828,21 @@ function stopSync(){
 function toggleSync(){if(syncRunning)stopSync();else startSync();}
 function resync(){if(syncRunning){stopSync();setTimeout(()=>startSync(),10);}else startSync();}
 
-// Mic ON/OFF
+// Mic ON/OFF (BeatDetektor 엔진 사용)
 async function startMic(){
   try{
     micStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
     micCtx=new(window.AudioContext||window.webkitAudioContext)();
     const src=micCtx.createMediaStreamSource(micStream);
     micAnalyser=micCtx.createAnalyser();
-    micAnalyser.fftSize=2048;micAnalyser.smoothingTimeConstant=0.4;
+    micAnalyser.fftSize=1024;micAnalyser.smoothingTimeConstant=0.3;
     src.connect(micAnalyser);
-    micRunning=true;micBeatTimes=[];micEnergyHist=[];
-    // UI 업데이트
+    micRunning=true;
+    // BeatDetektor 초기화 (60~180 BPM 범위)
+    beatDetektor=new BeatDetektor(60,180);
+    bdStartTime=performance.now();
+    lastMicBPM=0;micBpmHoldCount=0;
+    // UI
     const btn=document.getElementById('tap-btn');
     btn.classList.add('mic-on');
     document.getElementById('tap-lbl').textContent='MIC + TAP';
@@ -699,7 +861,7 @@ function stopMic(){
   if(micAnimId){cancelAnimationFrame(micAnimId);micAnimId=null;}
   if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;}
   if(micCtx){micCtx.close();micCtx=null;}
-  micAnalyser=null;
+  micAnalyser=null;beatDetektor=null;
   const btn=document.getElementById('tap-btn');
   btn.classList.remove('mic-on');
   document.getElementById('tap-lbl').textContent='TAP';
@@ -712,51 +874,49 @@ function stopMic(){
 }
 function toggleMic(){if(micRunning)stopMic();else startMic();}
 
+let lastBeatCount=0; // 비트 감지 플래시용
 function micLoop(){
-  if(!micRunning||!micAnalyser)return;
-  const buf=new Uint8Array(micAnalyser.frequencyBinCount);
-  micAnalyser.getByteFrequencyData(buf);
-  let lowE=0;const lo=Math.min(12,buf.length);
-  for(let i=1;i<=lo;i++)lowE+=buf[i]*buf[i];
-  lowE=Math.sqrt(lowE/lo);
-  let total=0;for(let i=0;i<buf.length;i++)total+=buf[i];
-  total/=buf.length;
-  document.getElementById('mic-level-fill').style.width=Math.min(100,(total/128)*100)+'%';
-  micEnergyHist.push(lowE);
-  if(micEnergyHist.length>MIC_HIST)micEnergyHist.shift();
-  const avg=micEnergyHist.reduce((a,b)=>a+b,0)/micEnergyHist.length;
-  const now=performance.now();
-  const last=micBeatTimes.length>0?micBeatTimes[micBeatTimes.length-1]:0;
-  if(lowE>avg*micThreshold&&lowE>12&&(now-last)>MIC_MIN_IV){
-    micBeatTimes.push(now);
-    if(micBeatTimes.length>MIC_MAX_BEATS)micBeatTimes.shift();
-    // beat dot flash
-    const dot=document.getElementById('mic-beat-dot');
-    dot.classList.add('on');setTimeout(()=>dot.classList.remove('on'),100);
-    if(micBeatTimes.length>=4){
-      const ivs=[];
-      for(let i=1;i<micBeatTimes.length;i++)ivs.push(micBeatTimes[i]-micBeatTimes[i-1]);
-      ivs.sort((a,b)=>a-b);
-      const med=ivs[Math.floor(ivs.length/2)];
-      const filt=ivs.filter(v=>Math.abs(v-med)/med<0.3);
-      if(filt.length>=2){
-        const avgIv=filt.reduce((a,b)=>a+b,0)/filt.length;
-        const bpm=60000/avgIv;
-        if(bpm>=40&&bpm<=240){
-          // 앵커가 있으면: ±15% 범위 내에서만 마이크가 정밀 보정
-          // 앵커가 없으면: 마이크 BPM 그대로 사용
-          if(tapAnchorBPM>0){
-            const diff=Math.abs(bpm-tapAnchorBPM)/tapAnchorBPM;
-            if(diff<=MIC_ANCHOR_RANGE){
-              updateBPM(bpm,'mic'); // 앵커 범위 내 → 마이크 정밀 보정 적용
-              if(syncRunning){stopSync();startSync();}
-            }
-            // 범위 밖 → 무시 (탭 BPM 유지)
-          } else {
-            updateBPM(bpm,'mic'); // 앵커 없음 → 마이크 단독
-            if(!syncRunning&&micBeatTimes.length>=6){startSync();}
-            else if(syncRunning){stopSync();startSync();}
+  if(!micRunning||!micAnalyser||!beatDetektor)return;
+  // FFT 데이터 수집
+  const buf=new Float32Array(micAnalyser.frequencyBinCount);
+  micAnalyser.getFloatFrequencyData(buf);
+  // dB → 0~1 정규화 (BeatDetektor 입력용)
+  const fftNorm=new Array(buf.length);
+  for(let i=0;i<buf.length;i++)fftNorm[i]=Math.max(0,(buf[i]+100)/100);
+  // 레벨바 (전체 평균)
+  let total=0;for(let i=0;i<fftNorm.length;i++)total+=fftNorm[i];
+  total/=fftNorm.length;
+  document.getElementById('mic-level-fill').style.width=Math.min(100,total*150)+'%';
+  // BeatDetektor에 FFT 피드
+  const elapsed=(performance.now()-bdStartTime)/1000;
+  beatDetektor.process(elapsed,fftNorm);
+  // 비트 플래시 (quarter_counter 변화 감지)
+  if(beatDetektor.quarter_counter!==lastBeatCount&&beatDetektor.win_val>=BD_CONFIDENCE_MIN){
+    lastBeatCount=beatDetektor.quarter_counter;
+    if(beatDetektor.quarter_counter%4===1){
+      const dot=document.getElementById('mic-beat-dot');
+      dot.classList.add('on');setTimeout(()=>dot.classList.remove('on'),100);
+    }
+  }
+  // BPM 업데이트 (신뢰도 + 히스테리시스 필터)
+  if(beatDetektor.win_val>=BD_CONFIDENCE_MIN&&beatDetektor.winning_bpm>0){
+    const bpm=60/(beatDetektor.win_bpm_int/10);
+    if(bpm>=40&&bpm<=240){
+      const diff=Math.abs(bpm-lastMicBPM);
+      // 히스테리시스: 변화량이 임계값 이상이거나 아직 BPM이 없을 때만 업데이트
+      if(diff>=BD_HYSTERESIS_BPM||lastMicBPM===0){
+        lastMicBPM=bpm;
+        // 앵커 시스템 (탭 기준점 ±15% 범위 내에서만 마이크 보정)
+        if(tapAnchorBPM>0){
+          const anchorDiff=Math.abs(bpm-tapAnchorBPM)/tapAnchorBPM;
+          if(anchorDiff<=MIC_ANCHOR_RANGE){
+            updateBPM(bpm,'mic');
+            if(syncRunning){stopSync();startSync();}
           }
+        }else{
+          updateBPM(bpm,'mic');
+          if(syncRunning){stopSync();startSync();}
+          else if(beatDetektor.win_val>=25)startSync();
         }
       }
     }
@@ -764,8 +924,16 @@ function micLoop(){
   micAnimId=requestAnimationFrame(micLoop);
 }
 
+// 감도 → BeatDetektor BPM 범위 프리셋
 function sMicSens(v,b){
-  micThreshold=v;
+  // v: 1.0=넓은범위, 1.4=기본, 1.8=좁은범위
+  // BeatDetektor 재초기화 with 다른 범위
+  if(beatDetektor){
+    var ranges={1.0:[40,200],1.4:[60,180],1.8:[80,160]};
+    var r=ranges[v]||[60,180];
+    beatDetektor=new BeatDetektor(r[0],r[1]);
+    bdStartTime=performance.now();lastMicBPM=0;lastBeatCount=0;
+  }
   document.querySelectorAll('#mic-sens .pb').forEach(x=>x.classList.remove('on'));
   if(b)b.classList.add('on');
 }
