@@ -325,14 +325,14 @@
 </div>
 
 <div class="tabs">
-  <button class="tab on" onclick="sw('ratio',this)">비율</button>
-  <button class="tab" onclick="sw('bpm',this)">BPM</button>
+  <button class="tab on" onclick="sw('bpm',this)">BPM</button>
+  <button class="tab" onclick="sw('ratio',this)">비율</button>
   <button class="tab" onclick="sw('led',this)">LED</button>
   <button class="tab" onclick="sw('smpte',this)">SMPTE</button>
 </div>
 
 <!-- ===== 비율 ===== -->
-<div id="p-ratio" class="pnl on">
+<div id="p-ratio" class="pnl">
   <div class="c">
     <div class="ct">비율 → 해상도</div>
     <div class="ir">
@@ -370,7 +370,7 @@
 </div>
 
 <!-- ===== BPM ===== -->
-<div id="p-bpm" class="pnl">
+<div id="p-bpm" class="pnl on">
   <div class="c" id="bpm-card">
     <div class="ct">BPM</div>
     <button class="tap-btn" id="tap-btn" ontouchstart="tap(event)" onmousedown="tap(event)">
@@ -390,8 +390,8 @@
     <div class="sync-bar">
       <div class="sync-dot" id="sync-dot"></div>
       <div class="sync-controls">
-        <button class="sync-btn" id="sync-toggle" onclick="toggleSync()">▶ SYNC</button>
         <button class="sync-btn" onclick="resync()">↻ RESYNC</button>
+        <button class="sync-btn" id="sync-toggle" onclick="toggleSync()">▶ SYNC</button>
       </div>
       <div class="beat-counter" id="beat-counter">
         <div class="bc-box"><span class="bc" id="bc-1"></span></div>
