@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>VJONSH Calculator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+
+  :root {
+    --bg: #08080b;
+    --bg2: #0e0e14;
+    --bg3: #15151e;
+    --bg4: #1c1c28;
+    --brd: #222233;
+    --brd-f: #6c5ce7;
+    --t1: #eaeaef;
+    --t2: #7c7c9a;
+    --t3: #484864;
+    --ac: #6c5ce7;
+    --ac-d: rgba(108,92,231,0.1);
+    --ac-g: rgba(108,92,231,0.25);
+    --res: #a29bfe;
+    --grn: #00b894;
+    --r: 12px;
+    --rs: 8px;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--t1);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.4;
+    overflow: hidden;
+    height: 100%;
+    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    display: flex;
+    flex-direction: column;
+    padding: env(safe-area-inset-top) 14px env(safe-area-inset-bottom);
+    max-height: 100dvh;
+    background: linear-gradient(180deg, #0c0c15 0%, var(--bg) 40%);
+  }
+
+  /* Header */
+  .hdr {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 2px 10px; flex-shrink: 0;
+  }
+  .logo {
+    font-weight: 700; font-size: 16px; letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #fff 30%, var(--res) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .logo span { -webkit-text-fill-color: var(--ac); }
+  .badge {
+    font-size: 8px; color: var(--ac); background: var(--ac-d);
+    padding: 4px 10px; border-radius: 4px; letter-spacing: 1.5px;
+    border: 1px solid rgba(108,92,231,0.15); font-weight: 600;
+  }
+
+  /* Tabs */
+  .tabs {
+    display: flex; gap: 2px; background: var(--bg2); border-radius: var(--rs);
+    padding: 3px; margin-bottom: 12px; flex-shrink: 0;
+    border: 1px solid var(--brd);
+  }
+  .tab {
+    flex: 1; padding: 9px 2px; border: none; background: transparent;
+    color: var(--t3); font-family: inherit; font-size: 10px; font-weight: 600;
+    border-radius: 6px; cursor: pointer; text-align: center;
+    transition: color 0.2s ease, background 0.25s ease, box-shadow 0.25s ease;
+    letter-spacing: 0.5px;
+  }
+  .tab.on {
+    background: var(--ac); color: #fff; font-weight: 700;
+    box-shadow: 0 2px 12px rgba(108,92,231,0.4), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+
+  /* Panels */
+  .pnl { display: none; flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-bottom: 4px; }
+  .pnl.on { display: flex; flex-direction: column; gap: 10px; animation: fadeIn 0.2s ease; }
+  .pnl::-webkit-scrollbar { display: none; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+
+  /* Cards */
+  .c {
+    background: linear-gradient(160deg, var(--bg2) 0%, rgba(12,12,18,0.85) 100%);
+    border: 1px solid var(--brd);
+    border-radius: var(--r); padding: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.25), 0 1px 3px rgba(0,0,0,0.15);
+    position: relative;
+  }
+  .c::after {
+    content: ''; position: absolute; top: 0; left: 20px; right: 20px; height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(108,92,231,0.25), transparent);
+    pointer-events: none;
+  }
+  .ct {
+    font-size: 9px; font-weight: 700; color: var(--t3);
+    text-transform: uppercase; letter-spacing: 2px; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .ct::before {
+    content: ''; width: 3px; height: 12px;
+    background: linear-gradient(180deg, var(--ac), var(--res));
+    border-radius: 2px;
+  }
+
+  /* Input Rows */
+  .ir { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+  .ir:last-child { margin-bottom: 0; }
+  .ig { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+  .il { font-size: 9px; color: var(--t2); font-weight: 500; padding-left: 2px; }
+
+  .inf {
+    width: 100%; padding: 10px 12px; background: var(--bg3); border: 1px solid var(--brd);
+    border-radius: var(--rs); color: var(--t1); font-family: inherit;
+    font-size: 15px; font-weight: 500; outline: none; -webkit-appearance: none;
+    transition: all 0.15s ease;
+  }
+  .inf:focus {
+    background: var(--bg4); border-color: var(--ac);
+    box-shadow: 0 0 0 3px var(--ac-d), 0 0 16px rgba(108,92,231,0.08);
+  }
+  .inf::placeholder { color: var(--t3); font-weight: 300; }
+  .iu { font-size: 10px; color: var(--t3); min-width: 20px; text-align: center; padding-top: 14px; font-weight: 600; }
+
+  /* Result Boxes */
+  .rb {
+    background: linear-gradient(135deg, var(--ac-d), rgba(162,155,254,0.06));
+    border: 1px solid rgba(108,92,231,0.18);
+    border-radius: var(--rs); padding: 10px 12px;
+  }
+  .rl { font-size: 8px; color: var(--t2); text-transform: uppercase; letter-spacing: 1.2px; margin-bottom: 2px; font-weight: 600; }
+  .rv {
+    font-size: 18px; font-weight: 700; color: var(--res); letter-spacing: -0.5px;
+    text-shadow: 0 0 24px rgba(162,155,254,0.15);
+  }
+  .rv .u { font-size: 11px; font-weight: 400; color: var(--t2); margin-left: 3px; text-shadow: none; }
+
+  .rg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .rm {
+    background: var(--bg3); border-radius: var(--rs); padding: 10px 12px;
+    border: 1px solid rgba(34,34,51,0.5);
+  }
+  .rm .rv { font-size: 14px; }
+
+  /* Preset Buttons */
+  .pre { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 10px; }
+  .pb {
+    padding: 6px 12px; border: 1px solid var(--brd); background: var(--bg3);
+    color: var(--t2); font-family: inherit; font-size: 10px; font-weight: 600;
+    border-radius: 6px; cursor: pointer;
+    transition: all 0.12s ease;
+  }
+  .pb:active, .pb.on {
+    border-color: var(--ac); background: var(--ac-d); color: var(--ac);
+    box-shadow: 0 0 8px rgba(108,92,231,0.12);
+  }
+
+  select.inf {
+    cursor: pointer;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%237c7c9a' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 12px center; padding-right: 30px;
+  }
+
+  /* TAP Button */
+  .tap-btn {
+    width: 100%; padding: 22px; border: 2px solid var(--brd); background: var(--bg3);
+    border-radius: var(--r); cursor: pointer; display: flex; flex-direction: column;
+    align-items: center; gap: 6px; user-select: none; -webkit-user-select: none;
+    touch-action: manipulation; transition: all 0.08s ease;
+    position: relative; overflow: hidden;
+  }
+  .tap-btn::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at center, var(--ac-d) 0%, transparent 70%);
+    opacity: 0; transition: opacity 0.12s;
+  }
+  .tap-btn:active::before, .tap-btn.pulse::before { opacity: 1; }
+  .tap-btn:active, .tap-btn.pulse {
+    border-color: var(--ac);
+    transform: scale(0.97); box-shadow: 0 0 24px var(--ac-g);
+  }
+  .tap-bpm {
+    font-size: 46px; font-weight: 700; color: var(--res); letter-spacing: -2px; line-height: 1;
+    text-shadow: 0 0 30px rgba(162,155,254,0.25);
+    position: relative;
+  }
+  .tap-lbl { font-size: 9px; color: var(--t3); letter-spacing: 4px; position: relative; }
+
+  .tap-row { display: flex; gap: 6px; margin-top: 10px; }
+  .tap-stat {
+    flex: 1; background: var(--bg3); border-radius: var(--rs); padding: 8px 10px;
+    border: 1px solid rgba(34,34,51,0.5);
+  }
+  .tap-rst {
+    padding: 8px 14px; border: 1px solid var(--brd); background: var(--bg3);
+    color: var(--t3); font-family: inherit; font-size: 9px; font-weight: 600;
+    letter-spacing: 1px; border-radius: var(--rs); cursor: pointer;
+    transition: all 0.12s ease;
+  }
+  .tap-rst:active { border-color: #ff7675; color: #ff7675; background: rgba(255,118,117,0.06); }
+
+  /* Beat Sync */
+  .tap-btn.beat {
+    border-color: var(--ac);
+    box-shadow: 0 0 16px var(--ac-g), inset 0 0 12px var(--ac-d);
+  }
+  .tap-btn.beat::before { opacity: 0.6; }
+
+  .tap-btn.downbeat {
+    border-color: var(--res);
+    box-shadow: 0 0 28px var(--ac-g), 0 0 48px rgba(108,92,231,0.08), inset 0 0 16px var(--ac-d);
+  }
+  .tap-btn.downbeat::before { opacity: 1; }
+
+  .sync-bar { margin-top: 10px; display: flex; align-items: center; gap: 8px; }
+
+  .sync-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--t3); flex-shrink: 0;
+    transition: all 0.06s ease;
+  }
+  .sync-dot.on {
+    background: var(--ac);
+    box-shadow: 0 0 8px var(--ac), 0 0 16px var(--ac-g);
+  }
+
+  .sync-controls { display: flex; gap: 4px; }
+
+  .sync-btn {
+    padding: 6px 12px; border: 1px solid var(--brd); background: var(--bg3);
+    color: var(--t2); font-family: inherit; font-size: 9px; font-weight: 600;
+    border-radius: 6px; cursor: pointer; letter-spacing: 0.5px;
+    transition: all 0.12s ease;
+  }
+  .sync-btn:active { border-color: var(--ac); color: var(--ac); }
+  .sync-btn.running {
+    border-color: var(--ac); background: var(--ac-d); color: var(--ac);
+    box-shadow: 0 0 8px rgba(108,92,231,0.12);
+  }
+
+  .beat-counter { display: flex; gap: 10px; margin-left: auto; align-items: center; }
+
+  .bc-box { width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; }
+
+  .bc {
+    width: 7px; height: 7px; border-radius: 50%; background: var(--t3);
+    transition: all 0.08s ease;
+  }
+  .bc.on { background: var(--ac); box-shadow: 0 0 8px var(--ac); }
+  .bc.down { background: var(--res); box-shadow: 0 0 12px var(--res), 0 0 20px rgba(162,155,254,0.15); }
+
+  /* SMPTE Timecode */
+  .tc {
+    font-size: 28px; font-weight: 700; color: var(--res); text-align: center;
+    padding: 14px; background: linear-gradient(135deg, var(--ac-d), rgba(162,155,254,0.04));
+    border-radius: var(--rs);
+    letter-spacing: 3px; border: 1px solid rgba(108,92,231,0.18);
+    text-shadow: 0 0 24px rgba(162,155,254,0.2);
+  }
+  .tc .s { color: var(--t3); margin: 0 2px; }
+
+  /* Footer */
+  .ftr {
+    text-align: center; padding: 8px 0; font-size: 8px; color: var(--t3);
+    letter-spacing: 1.5px; flex-shrink: 0; font-weight: 500;
+  }
+
+  /* Mic */
+  .mic-level {
+    width: 100%; height: 3px; background: var(--bg4); border-radius: 2px;
+    margin-top: 10px; overflow: hidden;
+  }
+  .mic-level-fill {
+    height: 100%; width: 0%; border-radius: 2px;
+    background: linear-gradient(90deg, var(--ac), var(--grn));
+    transition: width 0.05s linear;
+    box-shadow: 0 0 6px rgba(0,184,148,0.25);
+  }
+
+  .mic-beat-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: var(--t3);
+    flex-shrink: 0; transition: all 0.06s ease;
+  }
+  .mic-beat-dot.on {
+    background: var(--grn); box-shadow: 0 0 8px var(--grn), 0 0 16px rgba(0,184,148,0.25);
+  }
+  .mic-ctrl {
+    display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap;
+  }
+  .mic-ctrl .sync-btn.running {
+    border-color: var(--grn); background: rgba(0,184,148,0.1); color: var(--grn);
+    box-shadow: 0 0 8px rgba(0,184,148,0.12);
+  }
+  .mic-ctrl .pre { display:flex; gap:4px; margin:0; align-items:center; }
+  .tap-btn.mic-on { border-color: var(--grn); }
+  .tap-btn.mic-on .tap-lbl { color: var(--grn); }
+
+  .use-btn {
+    padding: 7px 14px; border: 1px solid rgba(108,92,231,0.3); background: var(--ac-d);
+    color: var(--ac); font-family: inherit; font-size: 9px; font-weight: 600;
+    letter-spacing: 0.5px; border-radius: var(--rs); cursor: pointer;
+    transition: all 0.12s ease;
+  }
+  .use-btn:active { background: var(--ac); color: #fff; box-shadow: 0 0 12px rgba(108,92,231,0.25); }
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="logo">VJONSH<span>.</span>CALC</div>
+  <div class="badge">VJ TOOLS</div>
+</div>
+
+<div class="tabs">
+  <button class="tab on" onclick="sw('ratio',this)">비율</button>
+  <button class="tab" onclick="sw('bpm',this)">BPM</button>
+  <button class="tab" onclick="sw('led',this)">LED</button>
+  <button class="tab" onclick="sw('smpte',this)">SMPTE</button>
+</div>
+
+<!-- ===== 비율 ===== -->
+<div id="p-ratio" class="pnl on">
+  <div class="c">
+    <div class="ct">비율 → 해상도</div>
+    <div class="ir">
+      <div class="ig"><span class="il">폭 비율</span><input type="number" class="inf" id="r-rw" value="16" inputmode="decimal" oninput="calcR()"></div>
+      <span class="iu">:</span>
+      <div class="ig"><span class="il">높이 비율</span><input type="number" class="inf" id="r-rh" value="9" inputmode="decimal" oninput="calcR()"></div>
+    </div>
+    <div class="pre">
+      <button class="pb on" onclick="sR(16,9,this)">16:9</button>
+      <button class="pb" onclick="sR(16,10,this)">16:10</button>
+      <button class="pb" onclick="sR(21,9,this)">21:9</button>
+      <button class="pb" onclick="sR(4,3,this)">4:3</button>
+      <button class="pb" onclick="sR(32,9,this)">32:9</button>
+      <button class="pb" onclick="sR(1,1,this)">1:1</button>
+    </div>
+    <div class="ir">
+      <div class="ig"><span class="il">기준 폭 (px)</span><input type="number" class="inf" id="r-w1" value="3840" inputmode="numeric" oninput="calcR()"></div>
+      <span class="iu">→</span>
+      <div class="ig"><span class="il">높이 (auto)</span><input type="number" class="inf" id="r-h1" value="" placeholder="auto" inputmode="numeric" oninput="calcR()"></div>
+    </div>
+    <div class="rg">
+      <div class="rm"><div class="rl">결과 해상도</div><div class="rv" id="r-out">3840 × 2160</div></div>
+      <div class="rm"><div class="rl">검수</div><div class="rv" id="r-chk">240</div></div>
+    </div>
+  </div>
+  <div class="c">
+    <div class="ct">해상도 → 비율</div>
+    <div class="ir">
+      <div class="ig"><span class="il">폭</span><input type="number" class="inf" id="r2-w" value="1920" inputmode="numeric" oninput="calcR2()"></div>
+      <span class="iu">×</span>
+      <div class="ig"><span class="il">높이</span><input type="number" class="inf" id="r2-h" value="1080" inputmode="numeric" oninput="calcR2()"></div>
+    </div>
+    <div class="rb"><div class="rl">비율</div><div class="rv" id="r2-res">16 : 9</div></div>
+  </div>
+</div>
+
+<!-- ===== BPM ===== -->
+<div id="p-bpm" class="pnl">
+  <div class="c" id="bpm-card">
+    <div class="ct">BPM</div>
+    <button class="tap-btn" id="tap-btn" ontouchstart="tap(event)" onmousedown="tap(event)">
+      <span class="tap-bpm" id="tap-d">---</span>
+      <span class="tap-lbl" id="tap-lbl">TAP</span>
+    </button>
+    <div class="mic-level" id="mic-level" style="display:none"><div class="mic-level-fill" id="mic-level-fill"></div></div>
+    <div class="tap-row">
+      <div class="tap-stat"><div class="rl">탭</div><div class="rv" style="font-size:13px" id="tap-c">0</div></div>
+      <div class="tap-stat"><div class="rl">간격</div><div class="rv" style="font-size:13px" id="tap-i">--<span class="u">ms</span></div></div>
+      <button class="pb" onclick="bpmMult(0.5)" style="padding:6px 10px">÷2</button>
+      <button class="pb" onclick="bpmMult(2)" style="padding:6px 10px">×2</button>
+      <button class="use-btn" onclick="useBPM(currentBPM)">USE ↗</button>
+      <button class="tap-rst" onclick="tapR()">RESET</button>
+    </div>
+
+    <div class="sync-bar">
+      <div class="sync-dot" id="sync-dot"></div>
+      <div class="sync-controls">
+        <button class="sync-btn" id="sync-toggle" onclick="toggleSync()">▶ SYNC</button>
+        <button class="sync-btn" onclick="resync()">↻ RESYNC</button>
+      </div>
+      <div class="beat-counter" id="beat-counter">
+        <div class="bc-box"><span class="bc" id="bc-1"></span></div>
+        <div class="bc-box"><span class="bc" id="bc-2"></span></div>
+        <div class="bc-box"><span class="bc" id="bc-3"></span></div>
+        <div class="bc-box"><span class="bc" id="bc-4"></span></div>
+      </div>
+    </div>
+
+    <div class="mic-ctrl">
+      <button class="sync-btn" id="mic-toggle" onclick="toggleMic()">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+        MIC OFF
+      </button>
+      <div class="mic-beat-dot" id="mic-beat-dot" style="display:none"></div>
+      <div id="mic-sens" style="display:none" class="pre" style="margin:0;gap:4px">
+        <span class="il" style="padding-top:4px">감도</span>
+        <button class="pb" onclick="sMicSens(1.8,this)">LOW</button>
+        <button class="pb on" onclick="sMicSens(1.4,this)">MID</button>
+        <button class="pb" onclick="sMicSens(1.15,this)">HIGH</button>
+      </div>
+    </div>
+  </div>
+  <div class="c">
+    <div class="ct">배속 계산</div>
+    <div class="ir">
+      <div class="ig"><span class="il">원본 BPM</span><input type="number" class="inf" id="b-o" value="128" inputmode="decimal" step="0.1" oninput="calcB()"></div>
+      <span class="iu">→</span>
+      <div class="ig"><span class="il">변동 BPM</span><input type="number" class="inf" id="b-t" value="132" inputmode="decimal" step="0.1" oninput="calcB()"></div>
+    </div>
+    <div class="rb"><div class="rl">배속</div><div class="rv" id="b-spd">1.031<span class="u">×</span></div></div>
+  </div>
+  <div class="c">
+    <div class="ct">BPM → MS</div>
+    <div class="ir">
+      <div class="ig"><input type="number" class="inf" id="b-bpm" value="128" inputmode="decimal" step="0.1" oninput="calcBms()"></div>
+      <span class="iu">BPM</span>
+    </div>
+    <div class="rg">
+      <div class="rm"><div class="rl">1 Beat</div><div class="rv" id="bm-1">468.8<span class="u">ms</span></div></div>
+      <div class="rm"><div class="rl">½ Beat</div><div class="rv" id="bm-2">234.4<span class="u">ms</span></div></div>
+      <div class="rm"><div class="rl">¼ Beat</div><div class="rv" id="bm-4">117.2<span class="u">ms</span></div></div>
+      <div class="rm"><div class="rl">1 Bar</div><div class="rv" id="bm-b">1875<span class="u">ms</span></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== LED ===== -->
+<div id="p-led" class="pnl">
+  <div class="c">
+    <div class="ct">LED 패널 해상도</div>
+    <div class="ir">
+      <div class="ig"><span class="il">Pixel Pitch (mm)</span><input type="number" class="inf" id="l-p" value="3" inputmode="decimal" step="0.1" oninput="calcL()"></div>
+    </div>
+    <div class="pre">
+      <button class="pb" onclick="sP(1.5,this)">P1.5</button>
+      <button class="pb" onclick="sP(2,this)">P2</button>
+      <button class="pb" onclick="sP(2.5,this)">P2.5</button>
+      <button class="pb on" onclick="sP(3,this)">P3</button>
+      <button class="pb" onclick="sP(3.9,this)">P3.9</button>
+      <button class="pb" onclick="sP(4.8,this)">P4.8</button>
+    </div>
+    <div class="ir">
+      <div class="ig"><span class="il">폭 (mm)</span><input type="number" class="inf" id="l-w" value="8000" inputmode="numeric" oninput="calcL()"></div>
+      <span class="iu">×</span>
+      <div class="ig"><span class="il">높이 (mm)</span><input type="number" class="inf" id="l-h" value="6000" inputmode="numeric" oninput="calcL()"></div>
+    </div>
+    <div class="rg">
+      <div class="rm"><div class="rl">해상도</div><div class="rv" id="l-res">2667 × 2000</div></div>
+      <div class="rm"><div class="rl">비율</div><div class="rv" id="l-rat">4 : 3</div></div>
+    </div>
+  </div>
+  <div class="c">
+    <div class="ct">실측 크기 변환</div>
+    <div class="ir">
+      <div class="ig"><span class="il">mm</span><input type="number" class="inf" id="cv-mm" value="8000" inputmode="numeric" oninput="calcU()"></div>
+    </div>
+    <div class="rg">
+      <div class="rm"><div class="rl">cm</div><div class="rv" id="cv-cm">800</div></div>
+      <div class="rm"><div class="rl">m</div><div class="rv" id="cv-m">8.0</div></div>
+      <div class="rm"><div class="rl">inch</div><div class="rv" id="cv-in">314.96</div></div>
+      <div class="rm"><div class="rl">feet</div><div class="rv" id="cv-ft">26.25</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== SMPTE ===== -->
+<div id="p-smpte" class="pnl">
+  <div class="c">
+    <div class="ct">프레임 → 타임코드</div>
+    <div class="ir">
+      <div class="ig"><span class="il">총 프레임</span><input type="number" class="inf" id="s-f" value="119452" inputmode="numeric" oninput="calcS()"></div>
+      <div class="ig"><span class="il">FPS</span>
+        <select class="inf" id="s-fps" onchange="calcS();calcT();">
+          <option value="23.976">23.976</option><option value="24">24</option>
+          <option value="25">25</option><option value="29.97">29.97</option>
+          <option value="30" selected>30</option><option value="60">60</option>
+        </select>
+      </div>
+    </div>
+    <div class="tc" id="s-tc">01<span class="s">:</span>06<span class="s">:</span>21<span class="s">:</span>22</div>
+    <div class="rg" style="margin-top:8px">
+      <div class="rm"><div class="rl">초</div><div class="rv" id="s-sec">3981.7<span class="u">s</span></div></div>
+      <div class="rm"><div class="rl">분</div><div class="rv" id="s-min">66.4<span class="u">m</span></div></div>
+    </div>
+  </div>
+  <div class="c">
+    <div class="ct">타임코드 → 프레임</div>
+    <div class="ir">
+      <div class="ig"><span class="il">HH</span><input type="number" class="inf" id="t-h" value="1" min="0" inputmode="numeric" oninput="calcT()"></div>
+      <span class="iu">:</span>
+      <div class="ig"><span class="il">MM</span><input type="number" class="inf" id="t-m" value="6" min="0" max="59" inputmode="numeric" oninput="calcT()"></div>
+      <span class="iu">:</span>
+      <div class="ig"><span class="il">SS</span><input type="number" class="inf" id="t-s" value="21" min="0" max="59" inputmode="numeric" oninput="calcT()"></div>
+      <span class="iu">:</span>
+      <div class="ig"><span class="il">FF</span><input type="number" class="inf" id="t-f" value="22" min="0" inputmode="numeric" oninput="calcT()"></div>
+    </div>
+    <div class="rb"><div class="rl">총 프레임</div><div class="rv" id="t-res">119452<span class="u">f</span></div></div>
+  </div>
+</div>
+
+<div class="ftr">VJONSH · VJ CALCULATOR v1.1</div>
+
+<script>
+function sw(id,el){
+  document.querySelectorAll('.pnl').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.getElementById('p-'+id).classList.add('on');
+  el.classList.add('on');
+}
+
+function sR(w,h,b){
+  document.getElementById('r-rw').value=w;
+  document.getElementById('r-rh').value=h;
+  document.querySelectorAll('#p-ratio .pre .pb').forEach(x=>x.classList.remove('on'));
+  if(b)b.classList.add('on');
+  calcR();
+}
+function calcR(){
+  const rw=+document.getElementById('r-rw').value||0,rh=+document.getElementById('r-rh').value||0;
+  const w1=+document.getElementById('r-w1').value,h1=+document.getElementById('r-h1').value;
+  if(!rw||!rh)return;
+  let oW,oH;
+  if(w1&&!h1){oW=w1;oH=Math.round(w1*rh/rw);}
+  else if(!w1&&h1){oH=h1;oW=Math.round(h1*rw/rh);}
+  else if(w1&&h1){oW=w1;oH=Math.round(w1*rh/rw);}
+  else return;
+  const chk=oW/rw;
+  document.getElementById('r-out').textContent=oW+' × '+oH;
+  document.getElementById('r-chk').textContent=Number.isInteger(chk)?chk:chk.toFixed(2);
+}
+function calcR2(){
+  const w=+document.getElementById('r2-w').value||0,h=+document.getElementById('r2-h').value||0;
+  if(!w||!h)return;
+  const g=gcd(w,h);
+  document.getElementById('r2-res').textContent=(w/g)+' : '+(h/g);
+}
+function gcd(a,b){return b===0?a:gcd(b,a%b);}
+
+function calcB(){
+  const o=+document.getElementById('b-o').value||0,t=+document.getElementById('b-t').value||0;
+  if(!o)return;
+  document.getElementById('b-spd').innerHTML=(t/o).toFixed(3)+'<span class="u">×</span>';
+}
+function calcBms(){
+  const b=+document.getElementById('b-bpm').value||0;
+  if(!b)return;const ms=60000/b;
+  document.getElementById('bm-1').innerHTML=ms.toFixed(1)+'<span class="u">ms</span>';
+  document.getElementById('bm-2').innerHTML=(ms/2).toFixed(1)+'<span class="u">ms</span>';
+  document.getElementById('bm-4').innerHTML=(ms/4).toFixed(1)+'<span class="u">ms</span>';
+  document.getElementById('bm-b').innerHTML=(ms*4).toFixed(0)+'<span class="u">ms</span>';
+}
+
+// ===== 통합 BPM (TAP + MIC) =====
+// 탭 = 앵커 (기준점), 마이크 = 범위 내 정밀 보정
+let tT=[];const TTO=2500;
+let syncInterval=null, syncRunning=false, currentBeat=0, currentBPM=0;
+let micStream=null, micCtx=null, micAnalyser=null, micRunning=false;
+let micBeatTimes=[], micAnimId=null, micEnergyHist=[];
+let micThreshold=1.4;
+let tapAnchorBPM=0; // 탭이 설정한 기준 BPM (0이면 앵커 없음)
+const MIC_HIST=43, MIC_MIN_IV=250, MIC_MAX_BEATS=32;
+const MIC_ANCHOR_RANGE=0.15; // 앵커 ±15% 범위 내에서만 마이크 보정 허용
+
+function updateBPM(bpm,src){
+  currentBPM=bpm;
+  document.getElementById('tap-d').textContent=bpm.toFixed(1);
+  // 소스 표시: TAP / MIC / MIC+TAP
+  const lbl=document.getElementById('tap-lbl');
+  if(!micRunning) lbl.textContent='TAP';
+  else if(src==='tap') lbl.textContent='TAP ✓';
+  else if(src==='mic'&&tapAnchorBPM>0) lbl.textContent='MIC+TAP';
+  else lbl.textContent='MIC';
+}
+
+// TAP: 항상 앵커 설정 + BPM 업데이트
+function tap(e){
+  e.preventDefault();const n=performance.now();
+  if(tT.length>0&&(n-tT[tT.length-1])>TTO)tT=[];
+  tT.push(n);if(tT.length>16)tT.shift();
+  if(tT.length>=2){
+    const iv=[];for(let i=1;i<tT.length;i++)iv.push(tT[i]-tT[i-1]);
+    const avg=iv.reduce((a,b)=>a+b,0)/iv.length;
+    const bpm=60000/avg;
+    updateBPM(bpm,'tap');
+    document.getElementById('tap-i').innerHTML=avg.toFixed(0)+'<span class="u">ms</span>';
+    if(micRunning){
+      // 탭 앵커 설정: 마이크는 이 BPM ±15% 내에서만 보정 가능
+      tapAnchorBPM=bpm;
+      micBeatTimes=[];
+    }
+    if(tT.length>=4&&!syncRunning){startSync();}
+    else if(syncRunning){stopSync();startSync();}
+  }
+  document.getElementById('tap-c').textContent=tT.length;
+  const btn=document.getElementById('tap-btn');
+  btn.classList.add('pulse');setTimeout(()=>btn.classList.remove('pulse'),100);
+}
+
+function tapR(){
+  tT=[];currentBPM=0;tapAnchorBPM=0;micBeatTimes=[];micEnergyHist=[];
+  document.getElementById('tap-d').textContent='---';
+  document.getElementById('tap-c').textContent='0';
+  document.getElementById('tap-i').innerHTML='--<span class="u">ms</span>';
+  document.getElementById('mic-level-fill').style.width='0%';
+  if(micRunning)document.getElementById('tap-lbl').textContent='MIC';
+  stopSync();
+}
+
+// ÷2 / ×2 보정 (앵커도 같이 이동)
+function bpmMult(f){
+  if(!currentBPM||currentBPM<=0)return;
+  const newBpm=currentBPM*f;
+  updateBPM(newBpm,'tap');
+  if(tapAnchorBPM>0)tapAnchorBPM=newBpm;
+  micBeatTimes=[];
+  if(syncRunning){stopSync();startSync();}
+}
+
+// Beat Sync
+function startSync(){
+  if(currentBPM<=0)return;
+  syncRunning=true;currentBeat=0;
+  const ms=60000/currentBPM;
+  const dot=document.getElementById('sync-dot');
+  const toggle=document.getElementById('sync-toggle');
+  toggle.textContent='■ STOP';toggle.classList.add('running');
+  function pulse(){
+    currentBeat=(currentBeat%4)+1;
+    const isDown=currentBeat===1;
+    const btn=document.getElementById('tap-btn');
+    btn.classList.remove('beat','downbeat');
+    dot.classList.add('on');
+    void btn.offsetWidth;
+    btn.classList.add(isDown?'downbeat':'beat');
+    for(let i=1;i<=4;i++){
+      const el=document.getElementById('bc-'+i);
+      el.classList.remove('on','down');
+      if(i===currentBeat)el.classList.add(isDown?'down':'on');
+    }
+    setTimeout(()=>{btn.classList.remove('beat','downbeat');dot.classList.remove('on');},Math.min(ms*0.3,120));
+  }
+  pulse();syncInterval=setInterval(pulse,ms);
+}
+function stopSync(){
+  syncRunning=false;
+  if(syncInterval){clearInterval(syncInterval);syncInterval=null;}
+  const btn=document.getElementById('tap-btn');
+  btn.classList.remove('beat','downbeat');
+  document.getElementById('sync-dot').classList.remove('on');
+  const toggle=document.getElementById('sync-toggle');
+  toggle.textContent='▶ SYNC';toggle.classList.remove('running');
+  currentBeat=0;
+  for(let i=1;i<=4;i++){document.getElementById('bc-'+i).classList.remove('on','down');}
+}
+function toggleSync(){if(syncRunning)stopSync();else startSync();}
+function resync(){if(syncRunning){stopSync();setTimeout(()=>startSync(),10);}else startSync();}
+
+// Mic ON/OFF
+async function startMic(){
+  try{
+    micStream=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
+    micCtx=new(window.AudioContext||window.webkitAudioContext)();
+    const src=micCtx.createMediaStreamSource(micStream);
+    micAnalyser=micCtx.createAnalyser();
+    micAnalyser.fftSize=2048;micAnalyser.smoothingTimeConstant=0.4;
+    src.connect(micAnalyser);
+    micRunning=true;micBeatTimes=[];micEnergyHist=[];
+    // UI 업데이트
+    const btn=document.getElementById('tap-btn');
+    btn.classList.add('mic-on');
+    document.getElementById('tap-lbl').textContent='MIC + TAP';
+    document.getElementById('mic-toggle').innerHTML='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg> MIC ON';
+    document.getElementById('mic-toggle').classList.add('running');
+    document.getElementById('mic-level').style.display='';
+    document.getElementById('mic-beat-dot').style.display='';
+    document.getElementById('mic-sens').style.display='';
+    micLoop();
+  }catch(e){
+    document.getElementById('mic-toggle').textContent='MIC DENIED';
+  }
+}
+function stopMic(){
+  micRunning=false;
+  if(micAnimId){cancelAnimationFrame(micAnimId);micAnimId=null;}
+  if(micStream){micStream.getTracks().forEach(t=>t.stop());micStream=null;}
+  if(micCtx){micCtx.close();micCtx=null;}
+  micAnalyser=null;
+  const btn=document.getElementById('tap-btn');
+  btn.classList.remove('mic-on');
+  document.getElementById('tap-lbl').textContent='TAP';
+  document.getElementById('mic-toggle').innerHTML='<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-1px"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg> MIC OFF';
+  document.getElementById('mic-toggle').classList.remove('running');
+  document.getElementById('mic-level').style.display='none';
+  document.getElementById('mic-level-fill').style.width='0%';
+  document.getElementById('mic-beat-dot').style.display='none';
+  document.getElementById('mic-sens').style.display='none';
+}
+function toggleMic(){if(micRunning)stopMic();else startMic();}
+
+function micLoop(){
+  if(!micRunning||!micAnalyser)return;
+  const buf=new Uint8Array(micAnalyser.frequencyBinCount);
+  micAnalyser.getByteFrequencyData(buf);
+  let lowE=0;const lo=Math.min(12,buf.length);
+  for(let i=1;i<=lo;i++)lowE+=buf[i]*buf[i];
+  lowE=Math.sqrt(lowE/lo);
+  let total=0;for(let i=0;i<buf.length;i++)total+=buf[i];
+  total/=buf.length;
+  document.getElementById('mic-level-fill').style.width=Math.min(100,(total/128)*100)+'%';
+  micEnergyHist.push(lowE);
+  if(micEnergyHist.length>MIC_HIST)micEnergyHist.shift();
+  const avg=micEnergyHist.reduce((a,b)=>a+b,0)/micEnergyHist.length;
+  const now=performance.now();
+  const last=micBeatTimes.length>0?micBeatTimes[micBeatTimes.length-1]:0;
+  if(lowE>avg*micThreshold&&lowE>12&&(now-last)>MIC_MIN_IV){
+    micBeatTimes.push(now);
+    if(micBeatTimes.length>MIC_MAX_BEATS)micBeatTimes.shift();
+    // beat dot flash
+    const dot=document.getElementById('mic-beat-dot');
+    dot.classList.add('on');setTimeout(()=>dot.classList.remove('on'),100);
+    if(micBeatTimes.length>=4){
+      const ivs=[];
+      for(let i=1;i<micBeatTimes.length;i++)ivs.push(micBeatTimes[i]-micBeatTimes[i-1]);
+      ivs.sort((a,b)=>a-b);
+      const med=ivs[Math.floor(ivs.length/2)];
+      const filt=ivs.filter(v=>Math.abs(v-med)/med<0.3);
+      if(filt.length>=2){
+        const avgIv=filt.reduce((a,b)=>a+b,0)/filt.length;
+        const bpm=60000/avgIv;
+        if(bpm>=40&&bpm<=240){
+          // 앵커가 있으면: ±15% 범위 내에서만 마이크가 정밀 보정
+          // 앵커가 없으면: 마이크 BPM 그대로 사용
+          if(tapAnchorBPM>0){
+            const diff=Math.abs(bpm-tapAnchorBPM)/tapAnchorBPM;
+            if(diff<=MIC_ANCHOR_RANGE){
+              updateBPM(bpm,'mic'); // 앵커 범위 내 → 마이크 정밀 보정 적용
+              if(syncRunning){stopSync();startSync();}
+            }
+            // 범위 밖 → 무시 (탭 BPM 유지)
+          } else {
+            updateBPM(bpm,'mic'); // 앵커 없음 → 마이크 단독
+            if(!syncRunning&&micBeatTimes.length>=6){startSync();}
+            else if(syncRunning){stopSync();startSync();}
+          }
+        }
+      }
+    }
+  }
+  micAnimId=requestAnimationFrame(micLoop);
+}
+
+function sMicSens(v,b){
+  micThreshold=v;
+  document.querySelectorAll('#mic-sens .pb').forEach(x=>x.classList.remove('on'));
+  if(b)b.classList.add('on');
+}
+
+function sP(v,b){
+  document.getElementById('l-p').value=v;
+  document.querySelectorAll('#p-led .pre .pb').forEach(x=>x.classList.remove('on'));
+  if(b)b.classList.add('on');calcL();
+}
+function calcL(){
+  const p=+document.getElementById('l-p').value||0;
+  const w=+document.getElementById('l-w').value||0,h=+document.getElementById('l-h').value||0;
+  if(!p)return;
+  const pw=Math.round(w/p),ph=Math.round(h/p),g=gcd(pw,ph);
+  document.getElementById('l-res').textContent=pw+' × '+ph;
+  document.getElementById('l-rat').textContent=(g>0?(pw/g):0)+' : '+(g>0?(ph/g):0);
+}
+function calcU(){
+  const mm=+document.getElementById('cv-mm').value||0;
+  document.getElementById('cv-cm').textContent=(mm/10).toFixed(1);
+  document.getElementById('cv-m').textContent=(mm/1000).toFixed(1);
+  document.getElementById('cv-in').textContent=(mm/25.4).toFixed(2);
+  document.getElementById('cv-ft').textContent=(mm/304.8).toFixed(2);
+}
+
+function calcS(){
+  const tf=+document.getElementById('s-f').value||0,fps=+document.getElementById('s-fps').value||30;
+  const ts=tf/fps,hh=Math.floor(ts/3600),mm=Math.floor((ts%3600)/60),ss=Math.floor(ts%60),ff=Math.round(tf%fps);
+  const pd=n=>String(n).padStart(2,'0');
+  document.getElementById('s-tc').innerHTML=pd(hh)+'<span class="s">:</span>'+pd(mm)+'<span class="s">:</span>'+pd(ss)+'<span class="s">:</span>'+pd(ff);
+  document.getElementById('s-sec').innerHTML=ts.toFixed(1)+'<span class="u">s</span>';
+  document.getElementById('s-min').innerHTML=(ts/60).toFixed(1)+'<span class="u">m</span>';
+  document.getElementById('t-h').value=hh;document.getElementById('t-m').value=mm;
+  document.getElementById('t-s').value=ss;document.getElementById('t-f').value=ff;
+  document.getElementById('t-res').innerHTML=tf+'<span class="u">f</span>';
+}
+function calcT(){
+  const fps=+document.getElementById('s-fps').value||30;
+  const hh=+document.getElementById('t-h').value||0,mm=+document.getElementById('t-m').value||0;
+  const ss=+document.getElementById('t-s').value||0,ff=+document.getElementById('t-f').value||0;
+  const tf=Math.round((hh*3600+mm*60+ss)*fps+ff);
+  document.getElementById('t-res').innerHTML=tf+'<span class="u">f</span>';
+  document.getElementById('s-f').value=tf;
+  const ts=tf/fps;
+  document.getElementById('s-sec').innerHTML=ts.toFixed(1)+'<span class="u">s</span>';
+  document.getElementById('s-min').innerHTML=(ts/60).toFixed(1)+'<span class="u">m</span>';
+  const pd=n=>String(n).padStart(2,'0');
+  document.getElementById('s-tc').innerHTML=pd(hh)+'<span class="s">:</span>'+pd(mm)+'<span class="s">:</span>'+pd(ss)+'<span class="s">:</span>'+pd(ff);
+}
+
+function useBPM(v){
+  if(!v||v<=0)return;
+  const s=v.toFixed(1);
+  document.getElementById('b-o').value=s;
+  document.getElementById('b-bpm').value=s;
+  calcB();calcBms();
+}
+
+calcR();calcR2();calcB();calcBms();calcL();calcU();calcS();
+</script>
+</body>
+</html>
